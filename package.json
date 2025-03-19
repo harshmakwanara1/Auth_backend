@@ -1,0 +1,15 @@
+{
+  "name": "auth_backend",
+  "version": "1.0.0",
+  "description": "Implementing express.js and mongoDB basics and practicing user authentication with help of middleware like jwt and bcryptJs.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "Auth",
+    "login"
+  ],
+  "author": "Harsh Makwana",
+  "license": "ISC"
+}
