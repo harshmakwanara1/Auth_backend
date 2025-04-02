@@ -1,1 +1,1 @@
-# This is just practice project for use authentication.
+# This is just practice project for user register and authentication.
