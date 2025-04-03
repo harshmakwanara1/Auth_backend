@@ -96,7 +96,8 @@ const loginUser = async (req, res) => {
 };
 
 const logoutUser = async (req, res) => {
-    await User.findByIdAndUpdate(req.user._id, 
+    await User.findByIdAndUpdate(
+        req.user._id,
         {
             $unset: {
                 refreshToken: 1, // this removes the field from document
@@ -106,13 +107,121 @@ const logoutUser = async (req, res) => {
     );
     const options = {
         httpOnly: true,
-        secure: true
-    }
-     return res
-         .status(200)
-         .clearCookie("accessToken", options)
-         .clearCookie("refreshToken", options)
-         .json(new ApiResponse(200, {}, "User logged Out"));
+        secure: true,
+    };
+    return res
+        .status(200)
+        .clearCookie("accessToken", options)
+        .clearCookie("refreshToken", options)
+        .json(new ApiResponse(200, {}, "User logged Out"));
 };
 
-export { registerUser, loginUser, logoutUser};
+const refreshAccessToken = async (req, res) => {
+    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+    if (!incomingRefreshToken) {
+        throw new ApiError(401, "Unauthorized request");
+    }
+    try {
+        const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
+
+        const user = await User.findById(decodedToken._id);
+        if (!user) {
+            throw new ApiError(401, "Invalid refresh token");
+        }
+
+        if (incomingRefreshToken !== user?.refreshToken) {
+            throw new ApiError(401, "Invalid refresh token");
+        }
+        const options = {
+            httpOnly: true,
+            secure: true,
+        };
+
+        const { accessToken, newRefreshToken } = await generateAccessAndRefereshTokens(user._id);
+
+        return res
+            .status(200)
+            .cookie("accessToken", accessToken, options)
+            .cookie("refreshToken", newRefreshToken, options)
+            .json(
+                new ApiResponse(
+                    200,
+                    { accessToken, refreshToken: newRefreshToken },
+                    "Access token refreshed"
+                )
+            );
+    } catch (error) {
+        throw new ApiError(401, error?.message || "Invalid refresh token");
+    }
+};
+
+const changeCurrentPassword = async (req, res) => {
+    try {
+        console.log("Request body:", req.body);
+        console.log("Request user ID:", req._id);
+
+        if (!req._id) {
+            throw new ApiError(400, "User ID is missing");
+        }
+
+        const user = await User.findById(req._id);
+        console.log("User found:", user);
+
+        if (!user) {
+            throw new ApiError(404, "User not found");
+        }
+
+        const { oldPassword, newPassword } = req.body;
+        const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+        console.log("Is old password correct:", isPasswordCorrect);
+
+        if (!isPasswordCorrect) {
+            throw new ApiError(400, "Invalid old password");
+        }
+
+        user.password = newPassword;
+        await user.save({ validateBeforeSave: false });
+
+        return res.status(200).json(new ApiResponse(200, {}, "Password changed successfully"));
+    } catch (error) {
+        console.error("Error in changeCurrentPassword:", error);
+        return res.status(500).json({ message: error.message });
+    }
+};
+
+const getCurrentUser = async (req, res) => {
+    return res
+        .status(200)
+        .json(new ApiResponse(200, req.user, "Current user fetched successfully"));
+};
+
+const updateAccountDetails = async (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+        throw new ApiError(400, "Email is required");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set: {
+                email,
+            },
+        },
+        { new: true }
+    );
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "Account details updated successfully"));
+};
+
+export {
+    registerUser,
+    loginUser,
+    logoutUser,
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails
+};
