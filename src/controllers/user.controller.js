@@ -13,10 +13,9 @@ const generateAccessAndRefereshTokens = async (userId) => {
 
         return { accessToken, refreshToken };
     } catch (error) {
-        throw new ApiError(500, "Something went wrong while generating referesh and access token");
+        throw new ApiError(500, "Something went wrong while generating refresh and access token");
     }
 };
-
 const registerUser = async (req, res) => {
     const { email, username, password } = req.body;
     try {
@@ -49,36 +48,51 @@ const registerUser = async (req, res) => {
 };
 
 const loginUser = async (req, res) => {
+    const { email, username, password } = req.body;
+
+    // Validate input
+    if (!(username || email)) {
+        return res.status(400).json({
+            statusCode: 400,
+            message: "Username or email is required",
+        });
+    }
+
     try {
-        const { email, username, password } = req.body;
-        // console.log(email);
-
-        if (!(username || email)) {
-            throw new ApiError(400, "username or email is required");
-        }
-
+        // Find user by username or email
         const user = await User.findOne({
             $or: [{ username }, { email }],
         });
 
         if (!user) {
-            throw new ApiError(404, "User does not exist");
+            return res.status(404).json({
+                statusCode: 404,
+                message: "User does not exist",
+            });
         }
 
+        // Validate password
         const isPasswordValid = await user.isPasswordCorrect(password);
         if (!isPasswordValid) {
-            throw new ApiError(401, "Invalid user credentials");
+            return res.status(401).json({
+                statusCode: 401,
+                message: "Invalid user credentials",
+            });
         }
 
+        // Generate access and refresh tokens
         const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(user._id);
 
+        // Fetch user details excluding sensitive fields
         const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
+        // Set cookies for tokens
         const options = {
             httpOnly: true,
             secure: true,
         };
 
+        // Return success response
         return res
             .status(200)
             .cookie("accessToken", accessToken, options)
@@ -86,15 +100,23 @@ const loginUser = async (req, res) => {
             .json(
                 new ApiResponse(
                     200,
-                    { user: loggedInUser, accessToken, refreshToken },
-                    "User logged in successfully"
+                    {
+                        user: loggedInUser,
+                        accessToken,
+                        refreshToken,
+                    },
+                    "User logged In Successfully"
                 )
             );
     } catch (error) {
-        return res.status(500).json({ message: error.message });
+        // Handle unexpected errors
+        console.error("Error in loginUser:", error);
+        return res.status(500).json({
+            statusCode: 500,
+            message: "An unexpected error occurred",
+        });
     }
 };
-
 const logoutUser = async (req, res) => {
     await User.findByIdAndUpdate(
         req.user._id,
@@ -211,9 +233,7 @@ const updateAccountDetails = async (req, res) => {
         { new: true }
     );
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, user, "Account details updated successfully"));
+    return res.status(200).json(new ApiResponse(200, user, "Account details updated successfully"));
 };
 
 export {
@@ -223,5 +243,5 @@ export {
     refreshAccessToken,
     changeCurrentPassword,
     getCurrentUser,
-    updateAccountDetails
+    updateAccountDetails,
 };
