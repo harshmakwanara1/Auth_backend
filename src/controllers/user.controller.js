@@ -1,6 +1,7 @@
 import { User } from "../models/user.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
+import {uploadOnCloudinary} from "../utils/cloudinary.js";
 
 const generateAccessAndRefereshTokens = async (userId) => {
     try {
@@ -18,6 +19,9 @@ const generateAccessAndRefereshTokens = async (userId) => {
 };
 const registerUser = async (req, res) => {
     const { email, username, password } = req.body;
+     console.log("Request received in registerUser");
+     console.log("Request body:", req.body);
+     console.log("Request file:", req.file?.filename);
     try {
         if ([email, username, password].some((field) => field?.trim() === "")) {
             throw new ApiError(400, "All fields are required");
@@ -28,10 +32,17 @@ const registerUser = async (req, res) => {
             throw new ApiError(409, "User with email or username already exists");
         }
 
+        const avatarLocalPath = req.file?.path;
+        console.log("Avatar local path:", avatarLocalPath);
+        const avatar = await uploadOnCloudinary(avatarLocalPath);
+        console.log("Avatar URL:", avatar?.url);
+        
+
         const user = await User.create({
             username: username.toLowerCase(),
             email,
             password,
+            avatar: avatar?.url || "",
         });
 
         const createdUser = await User.findById(user._id).select("-password -refreshToken");
@@ -43,6 +54,7 @@ const registerUser = async (req, res) => {
             .status(201)
             .json(new ApiResponse(200, createdUser, "User registered Successfully"));
     } catch (error) {
+         console.error("Error in registerUser:", error.message, error.stack);
         return res.status(500).json({ message: error.message });
     }
 };
